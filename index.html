@@ -54,26 +54,37 @@ document.getElementById('audioFile').addEventListener('change', async (e) => {
         if (source) source.disconnect();
     }
 
+    // Create audio element
     audio = new Audio(URL.createObjectURL(file));
     audio.loop = true;
-    await audio.play();
 
+    // Resume AudioContext on user interaction
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 1024;
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
+    }
+    if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
     }
 
+    // Create analyser
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    // Connect audio
     source = audioCtx.createMediaElementSource(audio);
     source.connect(analyser);
     analyser.connect(audioCtx.destination);
 
-    draw();
+    await audio.play(); // Start audio
+
+    draw(); // Start visualization
 });
 
 function draw() {
     requestAnimationFrame(draw);
+    if (!analyser) return;
+
     analyser.getByteTimeDomainData(dataArray);
 
     ctx.fillStyle = "rgba(0,0,0,0.3)";
@@ -97,5 +108,6 @@ function draw() {
     ctx.stroke();
 }
 </script>
+
 </body>
 </html>
