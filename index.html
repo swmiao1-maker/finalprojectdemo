@@ -50,6 +50,7 @@ canvas.height = window.innerHeight * 0.7;
 let audioCtx, analyser, dataArray;
 let micStream, micSource;
 let audio, audioSource;
+let audioSourceConnected = false;
 
 const startBtn = document.getElementById('startBtn');
 const audioFileInput = document.getElementById('audioFile');
@@ -62,6 +63,7 @@ function initAudioContext() {
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 1024;
         dataArray = new Uint8Array(analyser.frequencyBinCount);
+        analyser.connect(audioCtx.destination); // Connect analyser to speakers
     }
 }
 
@@ -72,7 +74,6 @@ startBtn.addEventListener('click', async () => {
         micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         micSource = audioCtx.createMediaStreamSource(micStream);
         micSource.connect(analyser);
-        analyser.connect(audioCtx.destination); // So mic is audible
         draw(); // Start visualization
         alert("Microphone access granted! You can now upload audio.");
         audioFileInput.disabled = false;
@@ -93,6 +94,7 @@ audioFileInput.addEventListener('change', async (e) => {
         audio.pause();
         audio = null;
         if (audioSource) audioSource.disconnect();
+        audioSourceConnected = false;
     }
 
     audio = new Audio(URL.createObjectURL(file));
@@ -102,22 +104,27 @@ audioFileInput.addEventListener('change', async (e) => {
     if (audioCtx.state === 'suspended') await audioCtx.resume();
 
     audioSource = audioCtx.createMediaElementSource(audio);
-    audioSource.connect(analyser);
-    // analyser already connected to destination from mic
-
+    // Do not connect yet; wait for manual play
     playAudioBtn.disabled = false; // Enable manual play
 });
 
 // --- Manual Play Button ---
 playAudioBtn.addEventListener('click', async () => {
     if (!audio) return;
+
     if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+    if (!audioSourceConnected) {
+        audioSource.connect(analyser);
+        audioSourceConnected = true;
+    }
+
     try {
         await audio.play();
-        playAudioBtn.disabled = true; // Optional: disable after play
+        playAudioBtn.disabled = true; // Optionally disable after play
     } catch (err) {
         console.error("Playback failed:", err);
-        alert("Audio playback failed. Make sure you clicked a button.");
+        alert("Audio playback failed. Make sure you clicked a button to start.");
     }
 });
 
