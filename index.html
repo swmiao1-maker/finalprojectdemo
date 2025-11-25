@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Audio Wave Visualizer</title>
+<title>Sound & Audio Wave Visualizer</title>
 <style>
     body {
         margin: 0;
@@ -19,31 +19,62 @@
     }
     canvas {
         width: 100vw;
-        height: 80vh;
+        height: 70vh;
         background: #000;
         display: block;
     }
-    input[type="file"] {
+    button, input[type="file"] {
         margin: 10px;
         color: #0f0;
+        font-size: 16px;
     }
 </style>
 </head>
 <body>
 
-<h3>Upload an audio file to see the waves react</h3>
-<input type="file" id="audioFile" accept="audio/*">
+<h3>Step 1: Allow microphone</h3>
+<button id="startBtn">Allow Microphone & Initialize Audio</button>
+<h3>Step 2: Upload an audio file</h3>
+<input type="file" id="audioFile" accept="audio/*" disabled>
+
 <canvas id="canvas"></canvas>
 
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
-
 canvas.width = window.innerWidth;
-canvas.height = window.innerHeight * 0.8;
+canvas.height = window.innerHeight * 0.7;
 
 let audioCtx, analyser, dataArray, source, audio;
+let micStream;
 
+// Step 1: Ask for microphone permission
+document.getElementById('startBtn').addEventListener('click', async () => {
+    try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Initialize AudioContext
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+        // Connect microphone to analyser
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 1024;
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        const micSource = audioCtx.createMediaStreamSource(micStream);
+        micSource.connect(analyser);
+
+        draw(); // Start visualization for microphone
+        alert("Microphone access granted! You can now upload audio.");
+        document.getElementById('audioFile').disabled = false;
+        document.getElementById('startBtn').disabled = true;
+    } catch (err) {
+        alert("Microphone permission denied!");
+        console.error(err);
+    }
+});
+
+// Step 2: Upload audio file
 document.getElementById('audioFile').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -54,31 +85,17 @@ document.getElementById('audioFile').addEventListener('change', async (e) => {
         if (source) source.disconnect();
     }
 
-    // Create audio element
     audio = new Audio(URL.createObjectURL(file));
     audio.loop = true;
 
-    // Resume AudioContext on user interaction
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (audioCtx.state === 'suspended') {
-        await audioCtx.resume();
-    }
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-    // Create analyser
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 1024;
-    dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-    // Connect audio
     source = audioCtx.createMediaElementSource(audio);
     source.connect(analyser);
     analyser.connect(audioCtx.destination);
 
-    await audio.play(); // Start audio
-
-    draw(); // Start visualization
+    await audio.play();
 });
 
 function draw() {
@@ -108,6 +125,5 @@ function draw() {
     ctx.stroke();
 }
 </script>
-
 </body>
 </html>
