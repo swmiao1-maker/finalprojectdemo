@@ -1,97 +1,101 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sound Wave Visualizer</title>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background: #000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-
-        canvas {
-            width: 100vw;
-            height: 100vh;
-        }
-
-        #info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: #0f0;
-            font-family: monospace;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audio Wave Visualizer</title>
+<style>
+    body {
+        margin: 0;
+        overflow: hidden;
+        background: #000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        height: 100vh;
+        color: #0f0;
+        font-family: monospace;
+    }
+    canvas {
+        width: 100vw;
+        height: 80vh;
+        background: #000;
+        display: block;
+    }
+    input[type="file"] {
+        margin: 10px;
+        color: #0f0;
+    }
+</style>
 </head>
 <body>
 
-<div id="info">🎤 Allow microphone to see the waves react to sound</div>
+<h3>Upload an audio file to see the waves react</h3>
+<input type="file" id="audioFile" accept="audio/*">
 <canvas id="canvas"></canvas>
 
 <script>
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight * 0.8;
 
-    let audioCtx, analyser, dataArray;
+let audioCtx, analyser, dataArray, source, audio;
 
-    async function setupAudio() {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+document.getElementById('audioFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (audio) {
+        audio.pause();
+        audio = null;
+        if (source) source.disconnect();
+    }
+
+    audio = new Audio(URL.createObjectURL(file));
+    audio.loop = true;
+    await audio.play();
+
+    if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         analyser = audioCtx.createAnalyser();
-
-        const source = audioCtx.createMediaStreamSource(stream);
-        source.connect(analyser);
-
         analyser.fftSize = 1024;
-
         dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-        draw();
     }
 
-    function draw() {
-        requestAnimationFrame(draw);
+    source = audioCtx.createMediaElementSource(audio);
+    source.connect(analyser);
+    analyser.connect(audioCtx.destination);
 
-        analyser.getByteTimeDomainData(dataArray);
+    draw();
+});
 
-        ctx.fillStyle = "rgba(0,0,0,0.3)";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+function draw() {
+    requestAnimationFrame(draw);
+    analyser.getByteTimeDomainData(dataArray);
 
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = "#00ffcc";
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        ctx.beginPath();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#00ffcc";
 
-        const sliceWidth = canvas.width / dataArray.length;
-        let x = 0;
+    ctx.beginPath();
+    const sliceWidth = canvas.width / dataArray.length;
+    let x = 0;
 
-        for (let i = 0; i < dataArray.length; i++) {
-            const v = dataArray[i] / 128.0; 
-            const y = (v * canvas.height) / 2;
-
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-
-            x += sliceWidth;
-        }
-
-        ctx.stroke();
+    for (let i = 0; i < dataArray.length; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = (v * canvas.height) / 2;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+        x += sliceWidth;
     }
 
-    setupAudio().catch(err => {
-        document.getElementById("info").innerText = "⚠️ Microphone permission denied!";
-        console.error(err);
-    });
+    ctx.stroke();
+}
 </script>
-
 </body>
 </html>
