@@ -121,7 +121,7 @@ playAudioBtn.addEventListener('click', async () => {
 
     try {
         await audio.play();
-        playAudioBtn.disabled = true; // Optionally disable after play
+        playAudioBtn.disabled = true; // Disable after playing
     } catch (err) {
         console.error("Playback failed:", err);
         alert("Audio playback failed. Make sure you clicked a button to start.");
