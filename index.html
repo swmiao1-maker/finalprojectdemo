@@ -34,8 +34,10 @@
 
 <h3>Step 1: Allow microphone</h3>
 <button id="startBtn">Allow Microphone & Initialize Audio</button>
+
 <h3>Step 2: Upload an audio file</h3>
 <input type="file" id="audioFile" accept="audio/*" disabled>
+<button id="playAudioBtn" disabled>Play Uploaded Audio</button>
 
 <canvas id="canvas"></canvas>
 
@@ -45,59 +47,81 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight * 0.7;
 
-let audioCtx, analyser, dataArray, source, audio;
-let micStream;
+let audioCtx, analyser, dataArray;
+let micStream, micSource;
+let audio, audioSource;
 
-// Step 1: Ask for microphone permission
-document.getElementById('startBtn').addEventListener('click', async () => {
-    try {
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // Initialize AudioContext
+const startBtn = document.getElementById('startBtn');
+const audioFileInput = document.getElementById('audioFile');
+const playAudioBtn = document.getElementById('playAudioBtn');
+
+// Initialize AudioContext and Analyser (once)
+function initAudioContext() {
+    if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') await audioCtx.resume();
-
-        // Connect microphone to analyser
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 1024;
         dataArray = new Uint8Array(analyser.frequencyBinCount);
+    }
+}
 
-        const micSource = audioCtx.createMediaStreamSource(micStream);
+// --- Step 1: Microphone ---
+startBtn.addEventListener('click', async () => {
+    try {
+        initAudioContext();
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micSource = audioCtx.createMediaStreamSource(micStream);
         micSource.connect(analyser);
-
-        draw(); // Start visualization for microphone
+        analyser.connect(audioCtx.destination); // So mic is audible
+        draw(); // Start visualization
         alert("Microphone access granted! You can now upload audio.");
-        document.getElementById('audioFile').disabled = false;
-        document.getElementById('startBtn').disabled = true;
+        audioFileInput.disabled = false;
+        startBtn.disabled = true;
     } catch (err) {
         alert("Microphone permission denied!");
         console.error(err);
     }
 });
 
-// Step 2: Upload audio file
-document.getElementById('audioFile').addEventListener('change', async (e) => {
+// --- Step 2: Upload Audio File ---
+audioFileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    // Stop previous audio if exists
     if (audio) {
         audio.pause();
         audio = null;
-        if (source) source.disconnect();
+        if (audioSource) audioSource.disconnect();
     }
 
     audio = new Audio(URL.createObjectURL(file));
     audio.loop = true;
 
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    initAudioContext();
     if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-    source = audioCtx.createMediaElementSource(audio);
-    source.connect(analyser);
-    analyser.connect(audioCtx.destination);
+    audioSource = audioCtx.createMediaElementSource(audio);
+    audioSource.connect(analyser);
+    // analyser already connected to destination from mic
 
-    await audio.play();
+    playAudioBtn.disabled = false; // Enable manual play
 });
 
+// --- Manual Play Button ---
+playAudioBtn.addEventListener('click', async () => {
+    if (!audio) return;
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    try {
+        await audio.play();
+        playAudioBtn.disabled = true; // Optional: disable after play
+    } catch (err) {
+        console.error("Playback failed:", err);
+        alert("Audio playback failed. Make sure you clicked a button.");
+    }
+});
+
+// --- Visualization ---
 function draw() {
     requestAnimationFrame(draw);
     if (!analyser) return;
@@ -109,8 +133,8 @@ function draw() {
 
     ctx.lineWidth = 3;
     ctx.strokeStyle = "#00ffcc";
-
     ctx.beginPath();
+
     const sliceWidth = canvas.width / dataArray.length;
     let x = 0;
 
