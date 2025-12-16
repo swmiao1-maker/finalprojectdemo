@@ -3,18 +3,34 @@
 <head>
 <meta charset="UTF-8" />
 <title>White Circle Audio Visualizer</title>
+
 <style>
   html, body {
     margin: 0;
     padding: 0;
-    background: black;
+    background: black url("0001-0120.gif") center center / cover no-repeat fixed;
     overflow: hidden;
     color: white;
     font-family: sans-serif;
   }
+
+  /* dark overlay for readability */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 0;
+    pointer-events: none;
+  }
+
   canvas {
     display: block;
+    background: transparent;
+    position: relative;
+    z-index: 1;
   }
+
   #controls {
     position: fixed;
     bottom: 12px;
@@ -22,8 +38,9 @@
     transform: translateX(-50%);
     display: flex;
     gap: 10px;
-    z-index: 10;
+    z-index: 2;
   }
+
   button, input {
     padding: 6px 12px;
     background: #111;
@@ -31,24 +48,29 @@
     border: 1px solid #444;
     cursor: pointer;
   }
+
   button:disabled {
     opacity: 0.4;
     cursor: default;
   }
 </style>
 </head>
+
 <body>
 <canvas id="canvas"></canvas>
+
 <div id="controls">
   <button id="micBtn">Enable Mic</button>
   <input type="file" id="audioInput" accept="audio/*" disabled />
   <button id="playBtn" disabled>Play</button>
   <button id="stopBtn" disabled>Stop</button>
 </div>
+
 <script>
 /* ============================== Canvas ============================== */
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+
 function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -70,10 +92,10 @@ let audioPausedForStatic = false;
 
 /* ============================== Static ============================== */
 let staticAmount = 0;
-const STATIC_FADE_IN = 0.0008;  // slow static build
-const STATIC_FADE_OUT = 0.002;  // slow fade
-let visualAlpha = 1;             // controls visualizer visibility
-const VISUAL_FADE_SPEED = 0.002; // slower fade-out for visualizer
+const STATIC_FADE_IN = 0.0008;
+const STATIC_FADE_OUT = 0.002;
+let visualAlpha = 1;
+const VISUAL_FADE_SPEED = 0.002;
 
 /* ============================== Controls ============================== */
 const micBtn = document.getElementById("micBtn");
@@ -148,17 +170,20 @@ stopBtn.onclick = () => {
 function drawCircle() {
   if (!analyser) return;
   analyser.getByteFrequencyData(dataArray);
+
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;
   const baseRadius = Math.min(cx, cy) * 0.75;
+
   ctx.save();
   ctx.translate(cx, cy);
-  const bars = dataArray.length;
-  ctx.globalAlpha = visualAlpha; // fade effect
-  for (let i = 0; i < bars; i++) {
+  ctx.globalAlpha = visualAlpha;
+
+  for (let i = 0; i < dataArray.length; i++) {
     const amp = dataArray[i];
     const len = amp * 0.15;
-    const angle = (i / bars) * Math.PI * 2;
+    const angle = (i / dataArray.length) * Math.PI * 2;
+
     ctx.rotate(angle);
     ctx.beginPath();
     ctx.moveTo(baseRadius, 0);
@@ -168,8 +193,9 @@ function drawCircle() {
     ctx.stroke();
     ctx.rotate(-angle);
   }
+
   ctx.restore();
-  ctx.globalAlpha = 1; // reset alpha
+  ctx.globalAlpha = 1;
 }
 
 /* ============================== Static Overlay ============================== */
@@ -191,18 +217,14 @@ function loop() {
   ctx.fillStyle = "rgba(0,0,0,0.25)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // slowly fade visualizer when audio paused/static fully formed
   if (audioPausedForStatic) {
-    visualAlpha -= VISUAL_FADE_SPEED;
-    visualAlpha = Math.max(0, visualAlpha);
+    visualAlpha = Math.max(0, visualAlpha - VISUAL_FADE_SPEED);
   } else {
-    visualAlpha += VISUAL_FADE_SPEED;
-    visualAlpha = Math.min(1, visualAlpha);
+    visualAlpha = Math.min(1, visualAlpha + VISUAL_FADE_SPEED);
   }
 
   drawCircle();
 
-  // handle static build-up
   if (audioElement && !audioElement.paused && audioStartTime) {
     const elapsed = (performance.now() - audioStartTime) / 1000;
     if (elapsed > 5) staticAmount += STATIC_FADE_IN;
@@ -212,22 +234,21 @@ function loop() {
 
   staticAmount = Math.max(0, Math.min(1, staticAmount));
 
-  // Pause audio if static fully formed
   if (staticAmount >= 1 && !audioPausedForStatic) {
-    if (audioElement && !audioElement.paused) audioElement.pause();
-    if (micSource && micStream) micSource.disconnect();
+    audioElement?.pause();
+    micSource?.disconnect();
     audioPausedForStatic = true;
   }
 
-  // Resume audio if static faded
   if (staticAmount <= 0 && audioPausedForStatic) {
-    if (audioElement && audioElement.paused && playBtn.disabled) audioElement.play();
-    if (micSource && micStream) micSource.connect(analyser);
+    if (audioElement && playBtn.disabled) audioElement.play();
+    micSource?.connect(analyser);
     audioPausedForStatic = false;
   }
 
   if (staticAmount > 0) drawStatic();
 }
+
 loop();
 </script>
 </body>
