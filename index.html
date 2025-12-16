@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>White Circle Audio Visualizer</title>
+<title>White Circle Audio Visualizer with Video</title>
 
 <style>
   html, body {
@@ -10,12 +10,11 @@
     padding: 0;
     background: black;
     overflow: hidden;
-    color: white;
     font-family: sans-serif;
   }
 
-  /* === GIF BACKGROUND LAYER === */
-  #bgGif {
+  /* === VIDEO BACKGROUND === */
+  #bgVideo {
     position: fixed;
     inset: 0;
     width: 100%;
@@ -25,7 +24,7 @@
     pointer-events: none;
   }
 
-  /* optional dark overlay */
+  /* optional dark overlay on video */
   #bgOverlay {
     position: fixed;
     inset: 0;
@@ -68,13 +67,8 @@
 
 <body>
 
-<!-- === BACKGROUND GIF (HOSTED) === -->
-<img
-  id="bgGif"
-  src="https://media.tenor.com/9m7F0JQZ0nQAAAAC/abstract-loop.gif"
-  alt=""
-/>
-
+<!-- VIDEO BACKGROUND -->
+<video id="bgVideo" autoplay muted loop playsinline></video>
 <div id="bgOverlay"></div>
 
 <canvas id="canvas"></canvas>
@@ -87,189 +81,199 @@
 </div>
 
 <script>
-/* ============================== Canvas ============================== */
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+window.addEventListener("DOMContentLoaded", () => {
+  /* ============================== VIDEO SETUP ============================== */
+  const bgVideo = document.getElementById("bgVideo");
+  bgVideo.src = "./0001-0120.mp4"; // make sure path is correct
+  bgVideo.play().catch(() => {
+    document.body.addEventListener("click", () => bgVideo.play(), { once: true });
+  });
 
-function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-window.addEventListener("resize", resize);
-resize();
+  /* ============================== CANVAS SETUP ============================== */
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
 
-/* ============================== Audio ============================== */
-let audioCtx;
-let analyser;
-let dataArray;
-let micSource;
-let micStream;
-let audioElement;
-let audioSource;
-let audioConnected = false;
-let audioStartTime = null;
-let audioPausedForStatic = false;
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener("resize", resize);
+  resize();
 
-/* ============================== Static ============================== */
-let staticAmount = 0;
-const STATIC_FADE_IN = 0.0008;
-const STATIC_FADE_OUT = 0.002;
-let visualAlpha = 1;
-const VISUAL_FADE_SPEED = 0.002;
+  /* ============================== AUDIO SETUP ============================== */
+  let audioCtx;
+  let analyser;
+  let dataArray;
+  let micSource;
+  let micStream;
+  let audioElement;
+  let audioSource;
+  let audioConnected = false;
+  let audioStartTime = null;
+  let audioPausedForStatic = false;
 
-/* ============================== Controls ============================== */
-const micBtn = document.getElementById("micBtn");
-const audioInput = document.getElementById("audioInput");
-const playBtn = document.getElementById("playBtn");
-const stopBtn = document.getElementById("stopBtn");
+  /* ============================== STATIC SETTINGS ============================== */
+  let staticAmount = 0;
+  const STATIC_FADE_IN = 0.0008;
+  const STATIC_FADE_OUT = 0.002;
+  let visualAlpha = 1;
+  const VISUAL_FADE_SPEED = 0.002;
 
-function initAudio() {
-  if (audioCtx) return;
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 1024;
-  dataArray = new Uint8Array(analyser.frequencyBinCount);
-  analyser.connect(audioCtx.destination);
-}
+  /* ============================== CONTROLS ============================== */
+  const micBtn = document.getElementById("micBtn");
+  const audioInput = document.getElementById("audioInput");
+  const playBtn = document.getElementById("playBtn");
+  const stopBtn = document.getElementById("stopBtn");
 
-/* ============================== Microphone ============================== */
-micBtn.onclick = async () => {
-  try {
+  function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+    analyser.connect(audioCtx.destination);
+  }
+
+  /* ============================== MICROPHONE ============================== */
+  micBtn.onclick = async () => {
+    try {
+      initAudio();
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micSource = audioCtx.createMediaStreamSource(micStream);
+      micSource.connect(analyser);
+      audioInput.disabled = false;
+      micBtn.disabled = true;
+    } catch {
+      alert("Microphone permission denied");
+    }
+  };
+
+  /* ============================== AUDIO FILE ============================== */
+  audioInput.onchange = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (audioElement) audioElement.pause();
     initAudio();
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    micSource = audioCtx.createMediaStreamSource(micStream);
-    micSource.connect(analyser);
-    audioInput.disabled = false;
-    micBtn.disabled = true;
-  } catch {
-    alert("Microphone permission denied");
-  }
-};
+    await audioCtx.resume();
+    audioElement = new Audio(URL.createObjectURL(file));
+    audioElement.loop = true;
+    audioSource = audioCtx.createMediaElementSource(audioElement);
+    audioConnected = false;
+    playBtn.disabled = false;
+    stopBtn.disabled = false;
+  };
 
-/* ============================== Audio File ============================== */
-audioInput.onchange = async e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  if (audioElement) audioElement.pause();
-  initAudio();
-  await audioCtx.resume();
-  audioElement = new Audio(URL.createObjectURL(file));
-  audioElement.loop = true;
-  audioSource = audioCtx.createMediaElementSource(audioElement);
-  audioConnected = false;
-  playBtn.disabled = false;
-  stopBtn.disabled = false;
-};
+  /* ============================== PLAY / STOP ============================== */
+  playBtn.onclick = async () => {
+    if (!audioElement) return;
+    await audioCtx.resume();
+    if (!audioConnected) {
+      audioSource.connect(analyser);
+      audioConnected = true;
+    }
+    audioStartTime = performance.now();
+    audioElement.play();
+    playBtn.disabled = true;
+  };
 
-/* ============================== Play / Stop ============================== */
-playBtn.onclick = async () => {
-  if (!audioElement) return;
-  await audioCtx.resume();
-  if (!audioConnected) {
-    audioSource.connect(analyser);
-    audioConnected = true;
-  }
-  audioStartTime = performance.now();
-  audioElement.play();
-  playBtn.disabled = true;
-};
-
-stopBtn.onclick = () => {
-  if (!audioElement) return;
-  audioElement.pause();
-  audioElement.currentTime = 0;
-  audioStartTime = null;
-  staticAmount = 0;
-  audioPausedForStatic = false;
-  visualAlpha = 1;
-  playBtn.disabled = false;
-  if (micSource && micStream) micSource.connect(analyser);
-};
-
-/* ============================== White Circular Visualizer ============================== */
-function drawCircle() {
-  if (!analyser) return;
-  analyser.getByteFrequencyData(dataArray);
-
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
-  const baseRadius = Math.min(cx, cy) * 0.75;
-
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.globalAlpha = visualAlpha;
-
-  for (let i = 0; i < dataArray.length; i++) {
-    const amp = dataArray[i];
-    const len = amp * 0.15;
-    const angle = (i / dataArray.length) * Math.PI * 2;
-
-    ctx.rotate(angle);
-    ctx.beginPath();
-    ctx.moveTo(baseRadius, 0);
-    ctx.lineTo(baseRadius + len, 0);
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.rotate(-angle);
-  }
-
-  ctx.restore();
-  ctx.globalAlpha = 1;
-}
-
-/* ============================== Static Overlay ============================== */
-function drawStatic() {
-  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const v = Math.random() * 255;
-    d[i] = d[i + 1] = d[i + 2] = v;
-    d[i + 3] = staticAmount * 100;
-  }
-  ctx.putImageData(img, 0, 0);
-}
-
-/* ============================== Main Loop ============================== */
-function loop() {
-  requestAnimationFrame(loop);
-
-  ctx.fillStyle = "rgba(0,0,0,0.25)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  if (audioPausedForStatic) {
-    visualAlpha = Math.max(0, visualAlpha - VISUAL_FADE_SPEED);
-  } else {
-    visualAlpha = Math.min(1, visualAlpha + VISUAL_FADE_SPEED);
-  }
-
-  drawCircle();
-
-  if (audioElement && !audioElement.paused && audioStartTime) {
-    const elapsed = (performance.now() - audioStartTime) / 1000;
-    if (elapsed > 5) staticAmount += STATIC_FADE_IN;
-  } else {
-    staticAmount -= STATIC_FADE_OUT;
-  }
-
-  staticAmount = Math.max(0, Math.min(1, staticAmount));
-
-  if (staticAmount >= 1 && !audioPausedForStatic) {
-    audioElement?.pause();
-    micSource?.disconnect();
-    audioPausedForStatic = true;
-  }
-
-  if (staticAmount <= 0 && audioPausedForStatic) {
-    if (audioElement && playBtn.disabled) audioElement.play();
-    micSource?.connect(analyser);
+  stopBtn.onclick = () => {
+    if (!audioElement) return;
+    audioElement.pause();
+    audioElement.currentTime = 0;
+    audioStartTime = null;
+    staticAmount = 0;
     audioPausedForStatic = false;
+    visualAlpha = 1;
+    playBtn.disabled = false;
+    if (micSource && micStream) micSource.connect(analyser);
+  };
+
+  /* ============================== VISUALIZER ============================== */
+  function drawCircle() {
+    if (!analyser) return;
+    analyser.getByteFrequencyData(dataArray);
+
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const baseRadius = Math.min(cx, cy) * 0.75;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.globalAlpha = visualAlpha;
+
+    for (let i = 0; i < dataArray.length; i++) {
+      const amp = dataArray[i];
+      const len = amp * 0.15;
+      const angle = (i / dataArray.length) * Math.PI * 2;
+
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(baseRadius, 0);
+      ctx.lineTo(baseRadius + len, 0);
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.rotate(-angle);
+    }
+
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
-  if (staticAmount > 0) drawStatic();
-}
+  /* ============================== STATIC EFFECT ============================== */
+  function drawStatic() {
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const v = Math.random() * 255;
+      d[i] = d[i + 1] = d[i + 2] = v;
+      d[i + 3] = staticAmount * 100;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
 
-loop();
+  /* ============================== MAIN LOOP ============================== */
+  function loop() {
+    requestAnimationFrame(loop);
+
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (audioPausedForStatic) {
+      visualAlpha = Math.max(0, visualAlpha - VISUAL_FADE_SPEED);
+    } else {
+      visualAlpha = Math.min(1, visualAlpha + VISUAL_FADE_SPEED);
+    }
+
+    drawCircle();
+
+    if (audioElement && !audioElement.paused && audioStartTime) {
+      const elapsed = (performance.now() - audioStartTime) / 1000;
+      if (elapsed > 5) staticAmount += STATIC_FADE_IN;
+    } else {
+      staticAmount -= STATIC_FADE_OUT;
+    }
+
+    staticAmount = Math.max(0, Math.min(1, staticAmount));
+
+    if (staticAmount >= 1 && !audioPausedForStatic) {
+      audioElement?.pause();
+      micSource?.disconnect();
+      audioPausedForStatic = true;
+    }
+
+    if (staticAmount <= 0 && audioPausedForStatic) {
+      if (audioElement && playBtn.disabled) audioElement.play();
+      micSource?.connect(analyser);
+      audioPausedForStatic = false;
+    }
+
+    if (staticAmount > 0) drawStatic();
+  }
+
+  loop();
+});
 </script>
+
 </body>
 </html>
