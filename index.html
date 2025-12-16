@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Audio Visualizer</title>
+  <title>Audio Visualizer with Flickering Static</title>
   <style>
     html, body {
       height: 100%;
@@ -13,7 +13,6 @@
       font-family: Arial, sans-serif;
     }
 
-    /* GIF background */
     body {
       background: url('tvworld.gif') no-repeat center center fixed;
       background-size: cover;
@@ -30,24 +29,33 @@
       z-index: 0;
     }
 
-    /* Canvas for visualizer */
     #visualizer {
       position: absolute;
       left: 50%;
-      top: 60%; /* slightly below center */
+      top: 60%;
       transform: translateX(-50%);
       width: 80%;
       height: 150px;
       z-index: 1;
     }
 
-    /* Controls container box */
+    #staticOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+      opacity: 0;
+    }
+
     .controls-box {
       position: absolute;
       bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 1;
+      z-index: 3;
       display: flex;
       gap: 10px;
       align-items: center;
@@ -74,6 +82,7 @@
 </head>
 <body>
   <canvas id="visualizer"></canvas>
+  <canvas id="staticOverlay"></canvas>
 
   <div class="controls-box">
     <button id="permissionBtn">Allow Mic & Speakers</button>
@@ -88,6 +97,11 @@
     canvas.width = window.innerWidth * 0.8;
     canvas.height = 150;
 
+    const staticCanvas = document.getElementById('staticOverlay');
+    const staticCtx = staticCanvas.getContext('2d');
+    staticCanvas.width = window.innerWidth;
+    staticCanvas.height = window.innerHeight;
+
     let audioCtx;
     let analyser;
     let source;
@@ -95,6 +109,8 @@
     let bufferLength;
     let animationId;
     let audioElement;
+    let startTime;
+    let staticOpacity = 0;
 
     const permissionBtn = document.getElementById('permissionBtn');
     const startBtn = document.getElementById('startBtn');
@@ -111,14 +127,13 @@
     });
 
     audioFileInput.addEventListener('change', (e) => {
-      if (audioElement) {
-        audioElement.pause();
-      }
+      if (audioElement) audioElement.pause();
       const file = e.target.files[0];
       if (file) {
         const url = URL.createObjectURL(file);
         audioElement = new Audio(url);
         audioElement.crossOrigin = "anonymous";
+        audioElement.volume = 1;
       }
     });
 
@@ -138,38 +153,76 @@
       }
     }
 
-    function draw() {
-      animationId = requestAnimationFrame(draw);
+    function drawVisualizer() {
+      animationId = requestAnimationFrame(drawVisualizer);
       analyser.getByteFrequencyData(dataArray);
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      const barWidth = (canvas.width / bufferLength) * 1; // thinner bars
+      const barWidth = (canvas.width / bufferLength) * 1; // thin bars
       let x = 0;
-
       for (let i = 0; i < bufferLength; i++) {
         const barHeight = dataArray[i];
-        ctx.fillStyle = `white`; // bars are white
+        ctx.fillStyle = 'white';
         ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
         x += barWidth + 1;
       }
+
+      handleStaticEffect();
+    }
+
+    function handleStaticEffect() {
+      if (!startTime || !audioElement) return;
+
+      const elapsed = (Date.now() - startTime) / 1000;
+      if (elapsed > 6) {
+        // gradually increase opacity
+        staticOpacity += 0.004; // faster fade in
+        if (staticOpacity > 1) staticOpacity = 1;
+
+        // fade out audio proportionally
+        audioElement.volume = Math.max(1 - staticOpacity, 0);
+
+        drawFlickeringStatic(staticOpacity);
+      }
+    }
+
+    function drawFlickeringStatic(opacity) {
+      const imageData = staticCtx.createImageData(staticCanvas.width, staticCanvas.height);
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        const val = Math.random() > 0.5 ? 255 : 0;
+        imageData.data[i] = val;
+        imageData.data[i+1] = val;
+        imageData.data[i+2] = val;
+        imageData.data[i+3] = 255 * opacity;
+      }
+      staticCtx.putImageData(imageData, 0, 0);
     }
 
     startBtn.addEventListener('click', () => {
       if (!audioElement) return alert('Select an MP3 file first');
       setupVisualizer();
+      audioElement.volume = 1;
       audioElement.play();
-      draw();
+      startTime = Date.now();
+      staticOpacity = 0;
+      drawVisualizer();
     });
 
     stopBtn.addEventListener('click', () => {
       if (audioElement) audioElement.pause();
       cancelAnimationFrame(animationId);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      staticCtx.clearRect(0, 0, staticCanvas.width, staticCanvas.height);
+      staticOpacity = 0;
+      startTime = null;
+      if (audioElement) audioElement.volume = 1;
     });
 
     window.addEventListener('resize', () => {
       canvas.width = window.innerWidth * 0.8;
+      staticCanvas.width = window.innerWidth;
+      staticCanvas.height = window.innerHeight;
     });
   </script>
 </body>
