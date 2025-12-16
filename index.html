@@ -68,7 +68,11 @@
 <body>
 
 <!-- VIDEO BACKGROUND -->
-<video id="bgVideo" autoplay muted loop playsinline></video>
+<video id="bgVideo" autoplay muted loop playsinline>
+  <source src="0001-0120.mp4" type="video/mp4" />
+  Your browser does not support the video tag.
+</video>
+
 <div id="bgOverlay"></div>
 
 <canvas id="canvas"></canvas>
@@ -82,13 +86,6 @@
 
 <script>
 window.addEventListener("DOMContentLoaded", () => {
-  /* ============================== VIDEO SETUP ============================== */
-  const bgVideo = document.getElementById("bgVideo");
-  bgVideo.src = "./0001-0120.mp4"; // make sure path is correct
-  bgVideo.play().catch(() => {
-    document.body.addEventListener("click", () => bgVideo.play(), { once: true });
-  });
-
   /* ============================== CANVAS SETUP ============================== */
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
