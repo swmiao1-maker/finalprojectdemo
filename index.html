@@ -3,33 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GitHub Page with GIF Background</title>
+  <title>Audio Visualizer</title>
   <style>
-    /* Make sure html and body take full height */
     html, body {
       height: 100%;
       margin: 0;
       padding: 0;
+      overflow: hidden;
       font-family: Arial, sans-serif;
     }
 
-    /* Set the GIF as the background */
+    /* GIF background */
     body {
       background: url('tvworld.gif') no-repeat center center fixed;
-      background-size: cover; /* Make it cover the entire screen */
+      background-size: cover;
     }
 
-    /* Optional: add content with contrast */
-    .content {
-      position: relative;
-      z-index: 1;
-      color: white;
-      text-align: center;
-      padding-top: 20%;
-      text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
-    }
-
-    /* Optional overlay to darken GIF for readability */
+    /* Optional overlay */
     body::before {
       content: "";
       position: fixed;
@@ -37,15 +27,146 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0,0,0,0.3); /* Adjust darkness */
+      background: rgba(0,0,0,0.2);
       z-index: 0;
+    }
+
+    /* Canvas for visualizer */
+    #visualizer {
+      position: absolute;
+      left: 50%;
+      top: 60%; /* slightly below center */
+      transform: translateX(-50%);
+      width: 80%;
+      height: 150px;
+      z-index: 1;
+    }
+
+    /* Controls container */
+    .controls {
+      position: absolute;
+      top: 80%;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    button, input[type="file"] {
+      padding: 8px 12px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: rgba(255,255,255,0.2);
     }
   </style>
 </head>
 <body>
-  <div class="content">
-    <h1>Welcome to TV World</h1>
-    <p>Enjoy your GIF background!</p>
+  <canvas id="visualizer"></canvas>
+
+  <div class="controls">
+    <button id="permissionBtn">Allow Mic & Speakers</button>
+    <input type="file" id="audioFile" accept=".mp3">
+    <button id="startBtn">Start</button>
+    <button id="stopBtn">Stop</button>
   </div>
+
+  <script>
+    const canvas = document.getElementById('visualizer');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth * 0.8;
+    canvas.height = 150;
+
+    let audioCtx;
+    let analyser;
+    let source;
+    let dataArray;
+    let bufferLength;
+    let animationId;
+    let audioElement;
+
+    const permissionBtn = document.getElementById('permissionBtn');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const audioFileInput = document.getElementById('audioFile');
+
+    permissionBtn.addEventListener('click', async () => {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        alert('Microphone access granted!');
+      } catch (err) {
+        alert('Permission denied: ' + err.message);
+      }
+    });
+
+    audioFileInput.addEventListener('change', (e) => {
+      if (audioElement) {
+        audioElement.pause();
+      }
+      const file = e.target.files[0];
+      if (file) {
+        const url = URL.createObjectURL(file);
+        audioElement = new Audio(url);
+        audioElement.crossOrigin = "anonymous";
+      }
+    });
+
+    function setupVisualizer() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        bufferLength = analyser.frequencyBinCount;
+        dataArray = new Uint8Array(bufferLength);
+      }
+
+      if (audioElement) {
+        source = audioCtx.createMediaElementSource(audioElement);
+        source.connect(analyser);
+        analyser.connect(audioCtx.destination);
+      }
+    }
+
+    function draw() {
+      animationId = requestAnimationFrame(draw);
+      analyser.getByteFrequencyData(dataArray);
+
+      ctx.fillStyle = 'rgba(0,0,0,0)';
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const barWidth = (canvas.width / bufferLength) * 2.5;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = dataArray[i];
+        ctx.fillStyle = `rgb(${barHeight + 100},50,${255-barHeight})`;
+        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+        x += barWidth + 1;
+      }
+    }
+
+    startBtn.addEventListener('click', () => {
+      if (!audioElement) return alert('Select an MP3 file first');
+      setupVisualizer();
+      audioElement.play();
+      draw();
+    });
+
+    stopBtn.addEventListener('click', () => {
+      if (audioElement) audioElement.pause();
+      cancelAnimationFrame(animationId);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth * 0.8;
+    });
+  </script>
 </body>
 </html>
