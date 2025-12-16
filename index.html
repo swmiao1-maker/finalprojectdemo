@@ -61,15 +61,17 @@ let audioCtx;
 let analyser;
 let dataArray;
 let micSource;
+let micStream;
 let audioElement;
 let audioSource;
 let audioConnected = false;
 let audioStartTime = null;
+let audioPausedForStatic = false;
 
 /* ============================== Static ============================== */
 let staticAmount = 0;
-const STATIC_FADE_IN = 0.0008; // slower
-const STATIC_FADE_OUT = 0.004;
+const STATIC_FADE_IN = 0.0008;  // slower
+const STATIC_FADE_OUT = 0.002;  // slower fade out for smooth transition
 
 /* ============================== Controls ============================== */
 const micBtn = document.getElementById("micBtn");
@@ -90,8 +92,8 @@ function initAudio() {
 micBtn.onclick = async () => {
   try {
     initAudio();
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    micSource = audioCtx.createMediaStreamSource(stream);
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    micSource = audioCtx.createMediaStreamSource(micStream);
     micSource.connect(analyser);
     audioInput.disabled = false;
     micBtn.disabled = true;
@@ -134,11 +136,14 @@ stopBtn.onclick = () => {
   audioElement.currentTime = 0;
   audioStartTime = null;
   staticAmount = 0;
+  audioPausedForStatic = false;
   playBtn.disabled = false;
+  if (micSource && micStream) micSource.connect(analyser);
 };
 
 /* ============================== White Circular Visualizer ============================== */
 function drawCircle() {
+  if (!analyser) return;
   analyser.getByteFrequencyData(dataArray);
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;
@@ -177,11 +182,14 @@ function drawStatic() {
 /* ============================== Main Loop ============================== */
 function loop() {
   requestAnimationFrame(loop);
+
   ctx.fillStyle = "rgba(0,0,0,0.25)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  if (analyser) drawCircle();
+  // draw visualizer regardless of audio state for smoother transition
+  drawCircle();
 
+  // handle static build-up
   if (audioElement && !audioElement.paused && audioStartTime) {
     const elapsed = (performance.now() - audioStartTime) / 1000;
     if (elapsed > 5) staticAmount += STATIC_FADE_IN;
@@ -189,13 +197,21 @@ function loop() {
     staticAmount -= STATIC_FADE_OUT;
   }
 
-  // Clamp static
+  // Clamp static between 0-1
   staticAmount = Math.max(0, Math.min(1, staticAmount));
 
-  // Stop audio when static fully forms
-  if (staticAmount >= 1) {
+  // Pause audio if static fully formed
+  if (staticAmount >= 1 && !audioPausedForStatic) {
     if (audioElement && !audioElement.paused) audioElement.pause();
-    if (micSource) micSource.disconnect();
+    if (micSource && micStream) micSource.disconnect();
+    audioPausedForStatic = true;
+  }
+
+  // Resume audio if static faded
+  if (staticAmount <= 0 && audioPausedForStatic) {
+    if (audioElement && audioElement.paused && playBtn.disabled) audioElement.play();
+    if (micSource && micStream) micSource.connect(analyser);
+    audioPausedForStatic = false;
   }
 
   if (staticAmount > 0) drawStatic();
