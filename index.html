@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>White Circle Audio Visualizer with Video</title>
+<title>White Circle Audio Visualizer with GIF</title>
 
 <style>
   html, body {
@@ -13,8 +13,8 @@
     font-family: sans-serif;
   }
 
-  /* === VIDEO BACKGROUND === */
-  #bgVideo {
+  /* === GIF BACKGROUND === */
+  #bgGif {
     position: fixed;
     inset: 0;
     width: 100%;
@@ -24,7 +24,7 @@
     pointer-events: none;
   }
 
-  /* optional dark overlay on video */
+  /* optional dark overlay on GIF */
   #bgOverlay {
     position: fixed;
     inset: 0;
@@ -67,12 +67,8 @@
 
 <body>
 
-<!-- VIDEO BACKGROUND -->
-<video id="bgVideo" autoplay muted loop playsinline>
-  <source src="0001-0120.mp4" type="video/mp4" />
-  Your browser does not support the video tag.
-</video>
-
+<!-- GIF BACKGROUND -->
+<img id="bgGif" src="0001-0120.gif" alt="Background GIF" />
 <div id="bgOverlay"></div>
 
 <canvas id="canvas"></canvas>
