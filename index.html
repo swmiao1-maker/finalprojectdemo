@@ -93,137 +93,125 @@
 
   <script>
     const canvas = document.getElementById('visualizer');
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth * 0.8;
-    canvas.height = 150;
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth * 0.8;
+  canvas.height = 150;
 
-    const staticCanvas = document.getElementById('staticOverlay');
-    const staticCtx = staticCanvas.getContext('2d');
+  const staticCanvas = document.getElementById('staticOverlay');
+  const staticCtx = staticCanvas.getContext('2d');
+  staticCanvas.width = window.innerWidth;
+  staticCanvas.height = window.innerHeight;
+
+  let audioCtx, analyser, source;
+  let dataArray, bufferLength;
+  let animationId;
+  let audioElement;
+  let startTime = null;
+  let staticStrength = 0;
+
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const audioFileInput = document.getElementById('audioFile');
+
+  audioFileInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    audioElement = new Audio(URL.createObjectURL(file));
+    audioElement.crossOrigin = "anonymous";
+    audioElement.volume = 1;
+  });
+
+  function setupAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      bufferLength = analyser.frequencyBinCount;
+      dataArray = new Uint8Array(bufferLength);
+    }
+    source = audioCtx.createMediaElementSource(audioElement);
+    source.connect(analyser);
+    analyser.connect(audioCtx.destination);
+  }
+
+  function drawVisualizer() {
+    animationId = requestAnimationFrame(drawVisualizer);
+
+    analyser.getByteFrequencyData(dataArray);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const barWidth = (canvas.width / bufferLength);
+    let x = 0;
+
+    for (let i = 0; i < bufferLength; i++) {
+      const h = dataArray[i];
+      ctx.fillStyle = "white";
+      ctx.fillRect(x, canvas.height - h, barWidth * 0.6, h);
+      x += barWidth;
+    }
+
+    updateStatic();
+  }
+
+  function updateStatic() {
+    if (!startTime) return;
+
+    const elapsed = (Date.now() - startTime) / 1000;
+
+    if (elapsed > 6) {
+      staticStrength += 0.01;
+      staticStrength = Math.min(staticStrength, 1);
+
+      // Fade audio BEFORE static is full
+      audioElement.volume = Math.max(1 - staticStrength, 0);
+
+      drawStatic(staticStrength);
+    }
+  }
+
+  function drawStatic(strength) {
+    staticCtx.clearRect(0, 0, staticCanvas.width, staticCanvas.height);
+    staticCtx.globalAlpha = strength;
+
+    const density = 8000;
+    for (let i = 0; i < density; i++) {
+      const x = Math.random() * staticCanvas.width;
+      const y = Math.random() * staticCanvas.height;
+      const shade = Math.random() > 0.5 ? 255 : 0;
+      staticCtx.fillStyle = `rgb(${shade},${shade},${shade})`;
+      staticCtx.fillRect(x, y, 2, 2);
+    }
+
+    staticCtx.globalAlpha = 1;
+  }
+
+  startBtn.onclick = () => {
+    if (!audioElement) return alert("Select an MP3 first");
+    setupAudio();
+    audioElement.play();
+    startTime = Date.now();
+    staticStrength = 0;
+    drawVisualizer();
+  };
+
+  stopBtn.onclick = () => {
+    cancelAnimationFrame(animationId);
+    if (audioElement) {
+      audioElement.pause();
+      audioElement.volume = 1;
+    }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    staticCtx.clearRect(0, 0, staticCanvas.width, staticCanvas.height);
+    startTime = null;
+    staticStrength = 0;
+  };
+
+  window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth * 0.8;
     staticCanvas.width = window.innerWidth;
     staticCanvas.height = window.innerHeight;
-
-    let audioCtx;
-    let analyser;
-    let source;
-    let dataArray;
-    let bufferLength;
-    let animationId;
-    let audioElement;
-    let startTime;
-    let staticOpacity = 0;
-
-    const permissionBtn = document.getElementById('permissionBtn');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const audioFileInput = document.getElementById('audioFile');
-
-    permissionBtn.addEventListener('click', async () => {
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        alert('Microphone access granted!');
-      } catch (err) {
-        alert('Permission denied: ' + err.message);
-      }
-    });
-
-    audioFileInput.addEventListener('change', (e) => {
-      if (audioElement) audioElement.pause();
-      const file = e.target.files[0];
-      if (file) {
-        const url = URL.createObjectURL(file);
-        audioElement = new Audio(url);
-        audioElement.crossOrigin = "anonymous";
-        audioElement.volume = 1;
-      }
-    });
-
-    function setupVisualizer() {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        bufferLength = analyser.frequencyBinCount;
-        dataArray = new Uint8Array(bufferLength);
-      }
-
-      if (audioElement) {
-        source = audioCtx.createMediaElementSource(audioElement);
-        source.connect(analyser);
-        analyser.connect(audioCtx.destination);
-      }
-    }
-
-    function drawVisualizer() {
-      animationId = requestAnimationFrame(drawVisualizer);
-      analyser.getByteFrequencyData(dataArray);
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const barWidth = (canvas.width / bufferLength) * 1; // thin bars
-      let x = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        const barHeight = dataArray[i];
-        ctx.fillStyle = 'white';
-        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-        x += barWidth + 1;
-      }
-
-      handleStaticEffect();
-    }
-
-    function handleStaticEffect() {
-      if (!startTime || !audioElement) return;
-
-      const elapsed = (Date.now() - startTime) / 1000;
-      if (elapsed > 6) {
-        // gradually increase opacity
-        staticOpacity += 0.004; // faster fade in
-        if (staticOpacity > 1) staticOpacity = 1;
-
-        // fade out audio proportionally
-        audioElement.volume = Math.max(1 - staticOpacity, 0);
-
-        drawFlickeringStatic(staticOpacity);
-      }
-    }
-
-    function drawFlickeringStatic(opacity) {
-      const imageData = staticCtx.createImageData(staticCanvas.width, staticCanvas.height);
-      for (let i = 0; i < imageData.data.length; i += 4) {
-        const val = Math.random() > 0.5 ? 255 : 0;
-        imageData.data[i] = val;
-        imageData.data[i+1] = val;
-        imageData.data[i+2] = val;
-        imageData.data[i+3] = 255 * opacity;
-      }
-      staticCtx.putImageData(imageData, 0, 0);
-    }
-
-    startBtn.addEventListener('click', () => {
-      if (!audioElement) return alert('Select an MP3 file first');
-      setupVisualizer();
-      audioElement.volume = 1;
-      audioElement.play();
-      startTime = Date.now();
-      staticOpacity = 0;
-      drawVisualizer();
-    });
-
-    stopBtn.addEventListener('click', () => {
-      if (audioElement) audioElement.pause();
-      cancelAnimationFrame(animationId);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      staticCtx.clearRect(0, 0, staticCanvas.width, staticCanvas.height);
-      staticOpacity = 0;
-      startTime = null;
-      if (audioElement) audioElement.volume = 1;
-    });
-
-    window.addEventListener('resize', () => {
-      canvas.width = window.innerWidth * 0.8;
-      staticCanvas.width = window.innerWidth;
-      staticCanvas.height = window.innerHeight;
-    });
-  </script>
+  });
+</script>
+  
 </body>
 </html>
