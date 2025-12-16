@@ -198,21 +198,23 @@
   stopBtn.onclick = () => {
   cancelAnimationFrame(animationId);
 
-  // DO NOT pause audio
+  if (audioElement) {
+    audioElement.pause();        // STOP audio
+    audioElement.currentTime = 0; // rewind
+    audioElement.volume = 1;
+  }
+
+  if (source) {
+    source.disconnect();
+    source = null;
+  }
+
   staticStrength = 0;
   startTime = null;
-
-  audioElement.volume = 1;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   staticCtx.clearRect(0, 0, staticCanvas.width, staticCanvas.height);
 };
-
-  window.addEventListener('resize', () => {
-    canvas.width = window.innerWidth * 0.8;
-    staticCanvas.width = window.innerWidth;
-    staticCanvas.height = window.innerHeight;
-  });
 </script>
   
 </body>
