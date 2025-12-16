@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>White Static Audio Visualizer</title>
+<title>Reactive Static Visualizer</title>
 <style>
 html, body {
     margin: 0;
@@ -58,7 +58,7 @@ function resize() {
     canvas.width = innerWidth;
     canvas.height = innerHeight;
 }
-addEventListener("resize", resize);
+window.addEventListener("resize", resize);
 resize();
 
 /* ================= Audio ================= */
@@ -69,8 +69,8 @@ let audioStartTime = null;
 
 /* ================= Static Visual ================= */
 let staticAmount = 0;
-const STATIC_FADE_IN = 0.002;
-const STATIC_FADE_OUT = 0.004;
+const STATIC_FADE_IN = 0.004; // faster fade-in
+const STATIC_FADE_OUT = 0.002; // slower fade-out
 
 /* ================= Controls ================= */
 const micBtn = document.getElementById("micBtn");
@@ -159,7 +159,7 @@ function drawCircle() {
 
     for (let i = 0; i < dataArray.length; i++) {
         const amp = dataArray[i];
-        const len = amp * 0.12; // subtle
+        const len = amp * 0.12; // subtle line movement
         const angle = (i / dataArray.length) * Math.PI * 2;
 
         ctx.rotate(angle);
@@ -173,6 +173,10 @@ function drawCircle() {
     }
 
     ctx.restore();
+
+    // Dynamic static trigger: higher audio amplitude → faster static growth
+    const sum = dataArray.reduce((a,b)=>a+b,0)/dataArray.length;
+    staticAmount += (sum/255) * STATIC_FADE_IN;
 }
 
 /* ================= Static Visual ================= */
@@ -196,20 +200,16 @@ function loop() {
 
     if (analyser) drawCircle();
 
-    // Fade in static visual after 5 seconds
-    if ((audioEl && !audioEl.paused) || micSource) {
-        const elapsed = audioStartTime ? (performance.now() - audioStartTime)/1000 : 0;
-        if (elapsed > 5) staticAmount += STATIC_FADE_IN;
+    // Fade out static slowly if audio is stopped
+    if (!audioEl?.paused && audioStartTime) {
+        staticAmount = Math.min(1, staticAmount); // capped
     } else {
         staticAmount -= STATIC_FADE_OUT;
+        staticAmount = Math.max(0, staticAmount);
     }
 
-    staticAmount = Math.max(0, Math.min(1, staticAmount));
-
-    // Gradually fade out audio as static visual grows
-    if (musicGain) {
-        musicGain.gain.value = 1 - staticAmount;
-    }
+    // Fade out audio according to staticAmount
+    if (musicGain) musicGain.gain.value = 1 - staticAmount;
 
     if (staticAmount > 0) drawStatic();
 }
