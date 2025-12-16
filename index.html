@@ -50,7 +50,6 @@ button:disabled {
 </div>
 
 <script>
-/* ================= Canvas ================= */
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
@@ -69,8 +68,8 @@ let audioStartTime = null;
 
 /* ================= Static Visual ================= */
 let staticAmount = 0;
-const STATIC_FADE_IN = 0.004; // faster fade-in
-const STATIC_FADE_OUT = 0.002; // slower fade-out
+const STATIC_FADE_IN = 0.004;
+const STATIC_FADE_OUT = 0.002;
 
 /* ================= Controls ================= */
 const micBtn = document.getElementById("micBtn");
@@ -159,7 +158,7 @@ function drawCircle() {
 
     for (let i = 0; i < dataArray.length; i++) {
         const amp = dataArray[i];
-        const len = amp * 0.12; // subtle line movement
+        const len = amp * 0.12;
         const angle = (i / dataArray.length) * Math.PI * 2;
 
         ctx.rotate(angle);
@@ -174,7 +173,7 @@ function drawCircle() {
 
     ctx.restore();
 
-    // Dynamic static trigger: higher audio amplitude → faster static growth
+    // Increase staticAmount based on audio amplitude
     const sum = dataArray.reduce((a,b)=>a+b,0)/dataArray.length;
     staticAmount += (sum/255) * STATIC_FADE_IN;
 }
@@ -200,15 +199,15 @@ function loop() {
 
     if (analyser) drawCircle();
 
-    // Fade out static slowly if audio is stopped
+    // Slowly fade out static if no audio
     if (!audioEl?.paused && audioStartTime) {
-        staticAmount = Math.min(1, staticAmount); // capped
+        staticAmount = Math.min(1, staticAmount);
     } else {
         staticAmount -= STATIC_FADE_OUT;
         staticAmount = Math.max(0, staticAmount);
     }
 
-    // Fade out audio according to staticAmount
+    // Fade out audio as static grows
     if (musicGain) musicGain.gain.value = 1 - staticAmount;
 
     if (staticAmount > 0) drawStatic();
