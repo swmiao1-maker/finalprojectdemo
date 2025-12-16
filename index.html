@@ -30,13 +30,12 @@
     }
 
     #visualizer {
-      position: absolute;
-      left: 50%;
-      top: 60%;
-      transform: translateX(-50%);
-      width: 80%;
-      height: 150px;
-      z-index: 1;
+position: fixed;
+  left: 20px;
+  bottom: 100px;   /* sits above the control box */
+  width: 300px;    /* compact, HUD-style */
+  height: 120px;
+  z-index: 1;
     }
 
   #staticOverlay {
@@ -95,8 +94,8 @@
   <script>
     const canvas = document.getElementById('visualizer');
   const ctx = canvas.getContext('2d');
-  canvas.width = window.innerWidth * 0.8;
-  canvas.height = 150;
+    canvas.width = 300;
+canvas.height = 120;
 
   const staticCanvas = document.getElementById('staticOverlay');
   const staticCtx = staticCanvas.getContext('2d');
