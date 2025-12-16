@@ -70,8 +70,10 @@ let audioPausedForStatic = false;
 
 /* ============================== Static ============================== */
 let staticAmount = 0;
-const STATIC_FADE_IN = 0.0008;  // slower
-const STATIC_FADE_OUT = 0.002;  // slower fade out for smooth transition
+const STATIC_FADE_IN = 0.0008;  // slow static build
+const STATIC_FADE_OUT = 0.002;  // slow fade
+let visualAlpha = 1;             // controls visualizer visibility
+const VISUAL_FADE_SPEED = 0.002; // slower fade-out for visualizer
 
 /* ============================== Controls ============================== */
 const micBtn = document.getElementById("micBtn");
@@ -137,6 +139,7 @@ stopBtn.onclick = () => {
   audioStartTime = null;
   staticAmount = 0;
   audioPausedForStatic = false;
+  visualAlpha = 1;
   playBtn.disabled = false;
   if (micSource && micStream) micSource.connect(analyser);
 };
@@ -151,6 +154,7 @@ function drawCircle() {
   ctx.save();
   ctx.translate(cx, cy);
   const bars = dataArray.length;
+  ctx.globalAlpha = visualAlpha; // fade effect
   for (let i = 0; i < bars; i++) {
     const amp = dataArray[i];
     const len = amp * 0.15;
@@ -165,6 +169,7 @@ function drawCircle() {
     ctx.rotate(-angle);
   }
   ctx.restore();
+  ctx.globalAlpha = 1; // reset alpha
 }
 
 /* ============================== Static Overlay ============================== */
@@ -186,7 +191,15 @@ function loop() {
   ctx.fillStyle = "rgba(0,0,0,0.25)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // draw visualizer regardless of audio state for smoother transition
+  // slowly fade visualizer when audio paused/static fully formed
+  if (audioPausedForStatic) {
+    visualAlpha -= VISUAL_FADE_SPEED;
+    visualAlpha = Math.max(0, visualAlpha);
+  } else {
+    visualAlpha += VISUAL_FADE_SPEED;
+    visualAlpha = Math.min(1, visualAlpha);
+  }
+
   drawCircle();
 
   // handle static build-up
@@ -197,7 +210,6 @@ function loop() {
     staticAmount -= STATIC_FADE_OUT;
   }
 
-  // Clamp static between 0-1
   staticAmount = Math.max(0, Math.min(1, staticAmount));
 
   // Pause audio if static fully formed
