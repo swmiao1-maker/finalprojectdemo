@@ -19,7 +19,6 @@
       background-size: cover;
     }
 
-    /* Optional overlay */
     body::before {
       content: "";
       position: fixed;
@@ -42,35 +41,41 @@
       z-index: 1;
     }
 
-    /* Controls container */
-    .controls {
+    /* Controls container box */
+    .controls-box {
       position: absolute;
-      top: 80%;
+      bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 1;
       display: flex;
       gap: 10px;
       align-items: center;
+      padding: 12px 20px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
     }
 
     button, input[type="file"] {
       padding: 8px 12px;
       font-size: 14px;
-      border-radius: 4px;
+      border-radius: 6px;
       border: none;
       cursor: pointer;
+      background: rgba(255,255,255,0.2);
+      color: white;
     }
 
-    button:hover {
-      background-color: rgba(255,255,255,0.2);
+    button:hover, input[type="file"]:hover {
+      background-color: rgba(255,255,255,0.35);
     }
   </style>
 </head>
 <body>
   <canvas id="visualizer"></canvas>
 
-  <div class="controls">
+  <div class="controls-box">
     <button id="permissionBtn">Allow Mic & Speakers</button>
     <input type="file" id="audioFile" accept=".mp3">
     <button id="startBtn">Start</button>
@@ -137,15 +142,14 @@
       animationId = requestAnimationFrame(draw);
       analyser.getByteFrequencyData(dataArray);
 
-      ctx.fillStyle = 'rgba(0,0,0,0)';
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      const barWidth = (canvas.width / bufferLength) * 2.5;
+      const barWidth = (canvas.width / bufferLength) * 1; // thinner bars
       let x = 0;
 
       for (let i = 0; i < bufferLength; i++) {
         const barHeight = dataArray[i];
-        ctx.fillStyle = `rgb(${barHeight + 100},50,${255-barHeight})`;
+        ctx.fillStyle = `white`; // bars are white
         ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
         x += barWidth + 1;
       }
