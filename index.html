@@ -2,43 +2,35 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>White Circle Audio Visualizer</title>
+<title>White Static Audio Visualizer</title>
 <style>
-    html, body {
-        margin: 0;
-        padding: 0;
-        background: black;
-        overflow: hidden;
-        color: white;
-        font-family: sans-serif;
-    }
+html, body {
+    margin: 0;
+    padding: 0;
+    background: black;
+    overflow: hidden;
+    color: white;
+    font-family: sans-serif;
+}
 
-    canvas {
-        display: block;
-    }
+canvas { display: block; }
 
-    #controls {
-        position: fixed;
-        bottom: 12px;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        gap: 10px;
-        z-index: 10;
-    }
+#controls {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    z-index: 10;
+}
 
-    button, input {
-        padding: 6px 12px;
-        background: #111;
-        color: white;
-        border: 1px solid #444;
-        cursor: pointer;
-    }
-
-    button:disabled {
-        opacity: 0.4;
-        cursor: default;
-    }
+button, input {
+    padding: 6px 12px;
+    background: #111;
+    color: white;
+    border: 1px solid #444;
+}
 </style>
 </head>
 <body>
@@ -53,42 +45,33 @@
 </div>
 
 <script>
-/* ==============================
-   Canvas
-============================== */
+/* ================= Canvas ================= */
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
 function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
 }
-window.addEventListener("resize", resize);
+addEventListener("resize", resize);
 resize();
 
-/* ==============================
-   Audio
-============================== */
-let audioCtx;
-let analyser;
-let dataArray;
-
+/* ================= Audio ================= */
+let audioCtx, analyser, dataArray;
+let audioEl, audioSource;
 let micSource;
-let audioElement;
-let audioSource;
-let audioConnected = false;
+
+let musicGain, noiseGain;
+let noiseSource;
+
 let audioStartTime = null;
 
-/* ==============================
-   Static
-============================== */
+/* ================= Static ================= */
 let staticAmount = 0;
 const STATIC_FADE_IN = 0.002;
 const STATIC_FADE_OUT = 0.004;
 
-/* ==============================
-   Controls
-============================== */
+/* ================= Controls ================= */
 const micBtn = document.getElementById("micBtn");
 const audioInput = document.getElementById("audioInput");
 const playBtn = document.getElementById("playBtn");
@@ -98,16 +81,40 @@ function initAudio() {
     if (audioCtx) return;
 
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 1024;
     dataArray = new Uint8Array(analyser.frequencyBinCount);
 
+    musicGain = audioCtx.createGain();
+    noiseGain = audioCtx.createGain();
+    noiseGain.gain.value = 0;
+
     analyser.connect(audioCtx.destination);
+    musicGain.connect(analyser);
+    noiseGain.connect(analyser);
+
+    createStaticNoise();
 }
 
-/* ==============================
-   Microphone
-============================== */
+/* ================= Static Noise ================= */
+function createStaticNoise() {
+    const bufferSize = audioCtx.sampleRate * 2;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+
+    noiseSource = audioCtx.createBufferSource();
+    noiseSource.buffer = buffer;
+    noiseSource.loop = true;
+    noiseSource.connect(noiseGain);
+    noiseSource.start();
+}
+
+/* ================= Microphone ================= */
 micBtn.onclick = async () => {
     try {
         initAudio();
@@ -118,93 +125,79 @@ micBtn.onclick = async () => {
         audioInput.disabled = false;
         micBtn.disabled = true;
     } catch {
-        alert("Microphone permission denied");
+        alert("Mic permission denied");
     }
 };
 
-/* ==============================
-   Audio File
-============================== */
+/* ================= Audio File ================= */
 audioInput.onchange = async e => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (audioElement) audioElement.pause();
-
     initAudio();
     await audioCtx.resume();
 
-    audioElement = new Audio(URL.createObjectURL(file));
-    audioElement.loop = true;
+    if (audioEl) audioEl.pause();
 
-    audioSource = audioCtx.createMediaElementSource(audioElement);
-    audioConnected = false;
+    audioEl = new Audio(URL.createObjectURL(file));
+    audioEl.loop = true;
+
+    audioSource = audioCtx.createMediaElementSource(audioEl);
+    audioSource.connect(musicGain);
 
     playBtn.disabled = false;
     stopBtn.disabled = false;
 };
 
-/* ==============================
-   Play / Stop
-============================== */
+/* ================= Play / Stop ================= */
 playBtn.onclick = async () => {
-    if (!audioElement) return;
-
+    if (!audioEl) return;
     await audioCtx.resume();
 
-    if (!audioConnected) {
-        audioSource.connect(analyser);
-        audioConnected = true;
-    }
-
     audioStartTime = performance.now();
-    audioElement.play();
-
+    audioEl.play();
     playBtn.disabled = true;
 };
 
 stopBtn.onclick = () => {
-    if (!audioElement) return;
+    if (audioEl) {
+        audioEl.pause();
+        audioEl.currentTime = 0;
+    }
 
-    audioElement.pause();
-    audioElement.currentTime = 0;
-    audioStartTime = null;
+    musicGain.gain.value = 1;
+    noiseGain.gain.value = 0;
+
     staticAmount = 0;
-
+    audioStartTime = null;
     playBtn.disabled = false;
 };
 
-/* ==============================
-   White Circular Visualizer
-============================== */
+/* ================= Visualizer ================= */
 function drawCircle() {
     analyser.getByteFrequencyData(dataArray);
 
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
 
-    // BIG circumference
-    const baseRadius = Math.min(cx, cy) * 0.75;
+    // BIG + WIDE ring
+    const baseRadius = Math.min(cx, cy) * 0.78;
+    const thickness = 4;
 
     ctx.save();
     ctx.translate(cx, cy);
 
-    const bars = dataArray.length;
-
-    for (let i = 0; i < bars; i++) {
+    for (let i = 0; i < dataArray.length; i++) {
         const amp = dataArray[i];
-
-        // subtle movement only
-        const len = amp * 0.15;
-
-        const angle = (i / bars) * Math.PI * 2;
+        const len = amp * 0.12; // subtle
+        const angle = (i / dataArray.length) * Math.PI * 2;
 
         ctx.rotate(angle);
         ctx.beginPath();
         ctx.moveTo(baseRadius, 0);
         ctx.lineTo(baseRadius + len, 0);
         ctx.strokeStyle = "white";
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = thickness;
         ctx.stroke();
         ctx.rotate(-angle);
     }
@@ -212,24 +205,20 @@ function drawCircle() {
     ctx.restore();
 }
 
-/* ==============================
-   Static Overlay
-============================== */
+/* ================= Static Visual ================= */
 function drawStatic() {
     const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const d = img.data;
 
     for (let i = 0; i < d.length; i += 4) {
         const v = Math.random() * 255;
-        d[i] = d[i + 1] = d[i + 2] = v;
-        d[i + 3] = staticAmount * 100;
+        d[i] = d[i+1] = d[i+2] = v;
+        d[i+3] = staticAmount * 120;
     }
     ctx.putImageData(img, 0, 0);
 }
 
-/* ==============================
-   Main Loop
-============================== */
+/* ================= Main Loop ================= */
 function loop() {
     requestAnimationFrame(loop);
 
@@ -238,7 +227,7 @@ function loop() {
 
     if (analyser) drawCircle();
 
-    if (audioElement && !audioElement.paused && audioStartTime) {
+    if (audioEl && !audioEl.paused && audioStartTime) {
         const elapsed = (performance.now() - audioStartTime) / 1000;
         if (elapsed > 5) staticAmount += STATIC_FADE_IN;
     } else {
@@ -246,6 +235,13 @@ function loop() {
     }
 
     staticAmount = Math.max(0, Math.min(1, staticAmount));
+
+    // 🔊 Crossfade: music → static
+    if (musicGain && noiseGain) {
+        musicGain.gain.value = 1 - staticAmount;
+        noiseGain.gain.value = staticAmount;
+    }
+
     if (staticAmount > 0) drawStatic();
 }
 
