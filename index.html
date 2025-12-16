@@ -1,272 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>White Circle Audio Visualizer with GIF</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitHub Page with GIF Background</title>
+  <style>
+    /* Make sure html and body take full height */
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
 
-<style>
-  html, body {
-    margin: 0;
-    padding: 0;
-    background: black;
-    overflow: hidden;
-    font-family: sans-serif;
-  }
+    /* Set the GIF as the background */
+    body {
+      background: url('tvworld.gif') no-repeat center center fixed;
+      background-size: cover; /* Make it cover the entire screen */
+    }
 
-  /* === GIF BACKGROUND === */
-  #bgGif {
-    position: fixed;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: 0;
-    pointer-events: none;
-  }
+    /* Optional: add content with contrast */
+    .content {
+      position: relative;
+      z-index: 1;
+      color: white;
+      text-align: center;
+      padding-top: 20%;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+    }
 
-  /* optional dark overlay on GIF */
-  #bgOverlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.45);
-    z-index: 1;
-    pointer-events: none;
-  }
-
-  canvas {
-    display: block;
-    background: transparent;
-    position: relative;
-    z-index: 2;
-  }
-
-  #controls {
-    position: fixed;
-    bottom: 12px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 10px;
-    z-index: 3;
-  }
-
-  button, input {
-    padding: 6px 12px;
-    background: #111;
-    color: white;
-    border: 1px solid #444;
-    cursor: pointer;
-  }
-
-  button:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-</style>
+    /* Optional overlay to darken GIF for readability */
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.3); /* Adjust darkness */
+      z-index: 0;
+    }
+  </style>
 </head>
-
 <body>
-
-<!-- GIF BACKGROUND -->
-<img id="bgGif" src="0001-0120.gif" alt="Background GIF" />
-<div id="bgOverlay"></div>
-
-<canvas id="canvas"></canvas>
-
-<div id="controls">
-  <button id="micBtn">Enable Mic</button>
-  <input type="file" id="audioInput" accept="audio/*" disabled />
-  <button id="playBtn" disabled>Play</button>
-  <button id="stopBtn" disabled>Stop</button>
-</div>
-
-<script>
-window.addEventListener("DOMContentLoaded", () => {
-  /* ============================== CANVAS SETUP ============================== */
-  const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d");
-
-  function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-  }
-  window.addEventListener("resize", resize);
-  resize();
-
-  /* ============================== AUDIO SETUP ============================== */
-  let audioCtx;
-  let analyser;
-  let dataArray;
-  let micSource;
-  let micStream;
-  let audioElement;
-  let audioSource;
-  let audioConnected = false;
-  let audioStartTime = null;
-  let audioPausedForStatic = false;
-
-  /* ============================== STATIC SETTINGS ============================== */
-  let staticAmount = 0;
-  const STATIC_FADE_IN = 0.0008;
-  const STATIC_FADE_OUT = 0.002;
-  let visualAlpha = 1;
-  const VISUAL_FADE_SPEED = 0.002;
-
-  /* ============================== CONTROLS ============================== */
-  const micBtn = document.getElementById("micBtn");
-  const audioInput = document.getElementById("audioInput");
-  const playBtn = document.getElementById("playBtn");
-  const stopBtn = document.getElementById("stopBtn");
-
-  function initAudio() {
-    if (audioCtx) return;
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 1024;
-    dataArray = new Uint8Array(analyser.frequencyBinCount);
-    analyser.connect(audioCtx.destination);
-  }
-
-  /* ============================== MICROPHONE ============================== */
-  micBtn.onclick = async () => {
-    try {
-      initAudio();
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      micSource = audioCtx.createMediaStreamSource(micStream);
-      micSource.connect(analyser);
-      audioInput.disabled = false;
-      micBtn.disabled = true;
-    } catch {
-      alert("Microphone permission denied");
-    }
-  };
-
-  /* ============================== AUDIO FILE ============================== */
-  audioInput.onchange = async e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (audioElement) audioElement.pause();
-    initAudio();
-    await audioCtx.resume();
-    audioElement = new Audio(URL.createObjectURL(file));
-    audioElement.loop = true;
-    audioSource = audioCtx.createMediaElementSource(audioElement);
-    audioConnected = false;
-    playBtn.disabled = false;
-    stopBtn.disabled = false;
-  };
-
-  /* ============================== PLAY / STOP ============================== */
-  playBtn.onclick = async () => {
-    if (!audioElement) return;
-    await audioCtx.resume();
-    if (!audioConnected) {
-      audioSource.connect(analyser);
-      audioConnected = true;
-    }
-    audioStartTime = performance.now();
-    audioElement.play();
-    playBtn.disabled = true;
-  };
-
-  stopBtn.onclick = () => {
-    if (!audioElement) return;
-    audioElement.pause();
-    audioElement.currentTime = 0;
-    audioStartTime = null;
-    staticAmount = 0;
-    audioPausedForStatic = false;
-    visualAlpha = 1;
-    playBtn.disabled = false;
-    if (micSource && micStream) micSource.connect(analyser);
-  };
-
-  /* ============================== VISUALIZER ============================== */
-  function drawCircle() {
-    if (!analyser) return;
-    analyser.getByteFrequencyData(dataArray);
-
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    const baseRadius = Math.min(cx, cy) * 0.75;
-
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.globalAlpha = visualAlpha;
-
-    for (let i = 0; i < dataArray.length; i++) {
-      const amp = dataArray[i];
-      const len = amp * 0.15;
-      const angle = (i / dataArray.length) * Math.PI * 2;
-
-      ctx.rotate(angle);
-      ctx.beginPath();
-      ctx.moveTo(baseRadius, 0);
-      ctx.lineTo(baseRadius + len, 0);
-      ctx.strokeStyle = "white";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.rotate(-angle);
-    }
-
-    ctx.restore();
-    ctx.globalAlpha = 1;
-  }
-
-  /* ============================== STATIC EFFECT ============================== */
-  function drawStatic() {
-    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const d = img.data;
-    for (let i = 0; i < d.length; i += 4) {
-      const v = Math.random() * 255;
-      d[i] = d[i + 1] = d[i + 2] = v;
-      d[i + 3] = staticAmount * 100;
-    }
-    ctx.putImageData(img, 0, 0);
-  }
-
-  /* ============================== MAIN LOOP ============================== */
-  function loop() {
-    requestAnimationFrame(loop);
-
-    ctx.fillStyle = "rgba(0,0,0,0.25)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    if (audioPausedForStatic) {
-      visualAlpha = Math.max(0, visualAlpha - VISUAL_FADE_SPEED);
-    } else {
-      visualAlpha = Math.min(1, visualAlpha + VISUAL_FADE_SPEED);
-    }
-
-    drawCircle();
-
-    if (audioElement && !audioElement.paused && audioStartTime) {
-      const elapsed = (performance.now() - audioStartTime) / 1000;
-      if (elapsed > 5) staticAmount += STATIC_FADE_IN;
-    } else {
-      staticAmount -= STATIC_FADE_OUT;
-    }
-
-    staticAmount = Math.max(0, Math.min(1, staticAmount));
-
-    if (staticAmount >= 1 && !audioPausedForStatic) {
-      audioElement?.pause();
-      micSource?.disconnect();
-      audioPausedForStatic = true;
-    }
-
-    if (staticAmount <= 0 && audioPausedForStatic) {
-      if (audioElement && playBtn.disabled) audioElement.play();
-      micSource?.connect(analyser);
-      audioPausedForStatic = false;
-    }
-
-    if (staticAmount > 0) drawStatic();
-  }
-
-  loop();
-});
-</script>
-
+  <div class="content">
+    <h1>Welcome to TV World</h1>
+    <p>Enjoy your GIF background!</p>
+  </div>
 </body>
 </html>
