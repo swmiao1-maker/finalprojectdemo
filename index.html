@@ -155,20 +155,20 @@
   }
 
   function updateStatic() {
-    if (!startTime) return;
+    if (!startTime || !audioElement) return;
 
-    const elapsed = (Date.now() - startTime) / 1000;
+  const elapsed = (Date.now() - startTime) / 1000;
 
-    if (elapsed > 6) {
-      staticStrength += 0.01;
-      staticStrength = Math.min(staticStrength, 1);
+  if (elapsed > 6) {
+    staticStrength += 0.01;
+    staticStrength = Math.min(staticStrength, 1);
 
-      // Fade audio BEFORE static is full
-      audioElement.volume = Math.max(1 - staticStrength, 0);
+    // Fade volume but NEVER stop playback
+    audioElement.volume = Math.max(1 - staticStrength, 0.05);
 
-      drawStatic(staticStrength);
-    }
+    drawStatic(staticStrength);
   }
+}
 
   function drawStatic(strength) {
     staticCtx.clearRect(0, 0, staticCanvas.width, staticCanvas.height);
@@ -196,16 +196,17 @@
   };
 
   stopBtn.onclick = () => {
-    cancelAnimationFrame(animationId);
-    if (audioElement) {
-      audioElement.pause();
-      audioElement.volume = 1;
-    }
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    staticCtx.clearRect(0, 0, staticCanvas.width, staticCanvas.height);
-    startTime = null;
-    staticStrength = 0;
-  };
+  cancelAnimationFrame(animationId);
+
+  // DO NOT pause audio
+  staticStrength = 0;
+  startTime = null;
+
+  audioElement.volume = 1;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  staticCtx.clearRect(0, 0, staticCanvas.width, staticCanvas.height);
+};
 
   window.addEventListener('resize', () => {
     canvas.width = window.innerWidth * 0.8;
